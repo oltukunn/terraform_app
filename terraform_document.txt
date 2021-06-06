@@ -1,0 +1,38 @@
+1. https://github.com/yumiba109/terraform_app.git をクローン
+
+2. https://github.com/yumiba109/terraform.git をクローン
+
+3. 1.を自分のリポジトリとして追加
+
+4. https://circleci.com/ja/vcs-authorize/ にアクセスして、GitHubログイン
+
+5. CircleCIでSetUpProject
+
+5. 1.のmasterからブランチを切る
+
+7. 適当にコードを編集してPUSH、PRを作成してCircleCIでテストされているかを確認
+
+----------------------------------------------------------------------------
+
+8. Terraformを使えるようにする
+brew update
+brew install terraform
+terraform --version
+
+9. AWSにログインしてIAMユーザーを作り、.aws/credential にアクセスキーとシークレットキーを追記
+[default]
+aws_access_key_id = 控えたアクセスキー
+aws_secret_access_key = 控えたシークレットアクセスキー
+
+10. AWS CLIをインストールする
+pip install awscli
+aws --version
+aws s3 ls
+
+11. ECRのリソースを作成
+cd terraform/ecr
+terraform init（作業ディレクトリの初期化、AWSを操作するためのプラグインをインストール）
+terraform plan（差分を表示）
+terraform apply（インフラ構築）
+
+※terraform destroy（構築したインフラを削除）

@@ -1,0 +1,88 @@
+version: 2.1
+
+jobs:
+  test:
+    docker:
+      - image: circleci/php:7.3-node-browsers
+      - image: circleci/mysql:5.7.22
+        environment:
+          MYSQL_DATABASE: terraform_sample
+          MYSQL_USER: default
+          MYSQL_PASSWORD: secret
+    environment:
+      APP_ENV: testing
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: terraform_sample
+      DB_USERNAME: default
+      DB_PASSWORD: secret
+    steps:
+      - checkout
+      - run: sudo composer self-update --1
+      - restore_cache:
+          key: composer-v1-{{ checksum "composer.lock" }}
+      - run: composer install -n --prefer-dist
+      - save_cache:
+          key: composer-v1-{{ checksum "composer.lock" }}
+          paths:
+            - vendor
+      - run:
+          name: setup Laravel
+          command: |
+            cp .env.example .env
+      - run:
+          name: get ready for mysql
+          command: |
+            sudo apt-get update
+            sudo apt-get install libpq-dev
+            sudo docker-php-ext-install pdo_mysql
+            dockerize -wait tcp://localhost:3306 -timeout 1m
+      - run:
+          name: php test
+          command: vendor/bin/phpunit
+  build_image:
+    docker:
+      - image: circleci/php:7.3-node-browsers
+    environment:
+      APP_ENV: production
+    steps:
+      - checkout
+      - setup_remote_docker
+      - run:
+          name: setup Laravel
+          command: |
+            cp .env.production .env
+            sudo chmod -R 777 storage bootstrap/cache
+      - run: composer install -n --prefer-dist
+      - run:
+          name: build container
+          command: |
+            docker build -t ${ECR_DOMAIN}/app:$CIRCLE_SHA1 -t ${ECR_DOMAIN}/app:latest --build-arg TZ=${TZ} -f ./docker/app/Dockerfile .
+            docker build -t ${ECR_DOMAIN}/web:$CIRCLE_SHA1 -t ${ECR_DOMAIN}/web:latest -f ./docker/web/Dockerfile .
+      - run:
+          name: install aws cli
+          command: |
+            curl "https://bootstrap.pypa.io/pip/3.5/get-pip.py" -o "get-pip.py"
+            sudo python get-pip.py
+            sudo pip install awscli
+      - run:
+          name: push docker image
+          command: |
+            $(aws ecr get-login --no-include-email --region ap-northeast-1)
+            docker push ${ECR_DOMAIN}/app:$CIRCLE_SHA1
+            docker push ${ECR_DOMAIN}/app:latest
+            docker push ${ECR_DOMAIN}/web:$CIRCLE_SHA1
+            docker push ${ECR_DOMAIN}/web:latest
+
+workflows:
+  version: 2
+  test:
+    jobs:
+      - test
+      - build_image:
+          requires:
+            - test
+          filters:
+            branches:
+              only: master
